@@ -1,0 +1,14 @@
+version: "3.6"
+services:
+    keepalived:
+        image: osixia/keepalived
+        deploy:
+          replicas: 1
+        networks:
+          - host
+        volumes:
+          - ${APP_DIR}/keepalived_master:/data
+        env_file:
+          - keepalived.env
+
+

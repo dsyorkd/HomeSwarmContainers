@@ -1,0 +1,100 @@
+version: '3.7'
+
+x-default-opts: 
+  &default-opts
+  logging:
+    options:
+      max-size: "1m"
+      gelf-address: "udp://127.0.0.1:5000"
+    driver: "gelf"
+      
+
+services:
+
+  elasticsearch:
+    <<: *default-opts
+    image: docker.elastic.co/elasticsearch/elasticsearch-oss:7.5.1
+    volumes:
+      - /var/data/elasticsearch:/usr/share/elasticsearch/data
+      - /var/data/elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+    environment:
+      - "ES_JAVA_OPT=-Xmx512m -Xms512m"
+      - node.name=elasticsearch
+      - cluster.name=yorkhaus-cluster
+      - "TAKE_FILE_OWNERSHIP=true"
+      - discovery.type=single-node
+    networks:
+      - elk
+    volumes:
+      - /var/data/elasticsearch:/usr/share/elasticsearch/data
+    deploy:
+      mode: replicated
+      replicas: 1
+
+  logspout:
+    image: bekt/logspout-logstash
+    environment:
+      ROUTE_URIS: 'logstash://logstash:5000'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - logstash
+    networks:
+      - elk
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+
+  logstash:
+    <<: *default-opts
+    image: docker.elastic.co/logstash/logstash-oss:7.5.1
+    ports:
+      - "5000:5000"
+      - "5000:5000/udp"
+      - "9600:9600"
+    networks:
+      - elk
+    volumes:
+     - /var/data/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    depends_on:
+      - elasticsearch
+    deploy:
+      replicas: 1
+
+  kibana:
+    <<: *default-opts
+    image: docker.elastic.co/kibana/kibana-oss:7.5.1
+    environment:
+      ELASTICSEARCH_HOSTS: 'http://elasticsearch:9200'
+    depends_on:
+      - elasticsearch
+    networks:
+      - elk
+      - traefik_public
+    ports:
+      - 5601:5601
+    deploy:
+      mode: replicated
+      replicas: 1
+      labels:
+        - traefik.enable=true
+        - traefik.http.middlewares.kibana-redirect.redirectscheme.scheme=https
+        - traefik.http.routers.kibana-web.middlewares=kibana-redirect
+        - traefik.http.routers.kibana-web.rule=Host(`kibana.${DOMAIN}`)
+        - traeifk.http.routers.kibana-web.entrypoints=web
+        - traefik.http.routers.kibana-websecure.rule=Host(`kibana.${DOMAIN}`)
+        - traefik.http.routers.kibana-websecure.tls=true
+        - traefik.http.routers.kibana-websecure.tls.certresolver=leresolver
+        - traefik.http.routers.kibana-websecure.entrypoints=websecure
+        - traefik.http.services.kibana.loadbalancer.server.port=5601
+      # TODO: make secrets secret
+
+
+networks:
+  elk:
+    external: true
+  traefik_public:
+    external: true
+

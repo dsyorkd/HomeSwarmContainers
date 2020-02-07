@@ -1,0 +1,60 @@
+version: '3.3'
+services:
+  unifi:
+    hostname: unifi
+    image: jacobalberty/unifi:5.12
+    deploy:
+      replicas: 1
+    networks:
+      - macvlan_swarm
+      - default
+    depends_on:
+      - mongo
+    ports:
+      - 3478:3478/tcp
+      - 10001:10001/udp
+      - 8808:8080/tcp
+      - 8443:8443/tcp
+    environment:
+        - UNIFI_UID=988
+        - UNIFI_GID=1001
+        - TZ=America/Chicago
+        - DB_URI=mongodb://mongo:27017/unifi
+        - STATDB_URI=mongodb://mongo:27017/unifi_stat
+        - DB_NAME=unifi
+        - RUNAS_UID0=false
+    volumes:
+      - /var/data/unifi:/unifi
+  mongo:
+    image: mongo:3.4
+    deploy:
+      replicas: 1
+    volumes:
+        - /var/data/unifi/mongo:/data/db
+        - /etc/localtime:/etc/localtime:ro
+    ports:
+        - 27017:27017
+    environment:
+        PUID: 988
+        PGID: 1001
+        TZ: America/Chicago
+  logs:
+    image: bash
+    depends_on:
+      - unifi
+    command: bash -c 'tail -F /unifi/log/*.log'
+    restart: always
+    volumes:
+      - /var/data/unifi/log:/unifi/log
+    
+networks:
+  internal: 
+    driver: overlay
+    attachable: true
+    ipam:
+      config:
+        - subnet: 172.16.201.0/24
+  macvlan_swarm:
+    external:
+      name: macvlan_swarm
+

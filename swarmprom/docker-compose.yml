@@ -1,0 +1,251 @@
+version: "3.3"
+
+networks:
+  net:
+    driver: overlay
+    attachable: true
+
+volumes:
+    prometheus: {}
+    grafana: {}
+    alertmanager: {}
+
+configs:
+  dockerd_config:
+    file: /var/data/swarmprom/dockerd-exporter/Caddyfile
+  node_rules:
+    file: /var/data/swarmprom/prometheus/rules/swarm_node.rules.yml
+  task_rules:
+    file: /var/data/swarmprom/prometheus/rules/swarm_task.rules.yml
+
+services:
+  dockerd-exporter:
+    image: stefanprodan/caddy
+    networks:
+      - appnet
+    environment:
+      - DOCKER_GWBRIDGE_IP=172.18.0.1
+      - PUID=988
+      - PGID=1001
+    configs:
+      - source: dockerd_config
+        target: /etc/caddy/Caddyfile
+    deploy:
+      mode: global
+      resources:
+        limits:
+          memory: 1024M
+        reservations:
+          memory: 64M
+
+  cadvisor:
+    image: google/cadvisor
+    networks:
+      - appnet
+    environment:
+      - PUID=988
+      - PGID=1001
+    command: -logtostderr -docker_only
+    networks:
+      - traefik_public
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/rootfs:ro
+      - /var/run:/var/run
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk/:ro 
+    deploy:
+      mode: global
+      resources:
+        limits:
+          memory: 1024M
+        reservations:
+          memory: 64M
+      labels:
+        - traefik.frontend.rule=Host:cadvisor.york.haus
+        - traefik.docker.network=traefik_public
+        - traefik.tags=traefik_public
+        - traefik.port=8080
+        - traefik.enable=true
+        - traefik.backend=cadvisor
+        - traefik.frontend.auth.forward.address=http://traefik-forward-auth:4181
+        - traefik.frontend.auth.forward.authResponseHeaders=X-Forwarded-User
+        - traefik.frontend.auth.forward.trustForwardHeader=true
+
+  grafana:
+    image: stefanprodan/swarmprom-grafana:5.3.4
+    networks:
+      - appnet
+      - traefik_public
+    env_file: /var/data/swarmprom/grafana.env
+    environment:
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_ADMIN_USER=syork
+      - GF_SECURITY_ADMIN_PASSWORD='&A3ezaSw'
+      - GF_SMTP_ENABLED=${GF_SMTP_ENABLED:-false}
+      - GF_SMTP_FROM_ADDRESS=${GF_SMTP_FROM_ADDRESS:-grafana@yorkserv.com}
+      - GF_SMTP_FROM_NAME=${GF_SMTP_FROM_NAME:-Grafana}
+      - GF_SMTP_HOST=${GF_SMTP_HOST:-smtp:587}
+      - GF_SMTP_USER=syork@yorkserv.com
+      - GF_SMTP_PASSWORD=`Turtl33lv|s`
+    volumes:
+      - /var/data/runtime/swarmprom/grafana:/var/lib/grafana
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          memory: 1024M
+        reservations:
+          memory: 64M
+      labels:
+        - traefik.frontend.rule=Host:grafana.york.haus
+        - traefik.docker.network=traefik_public
+        - traefik.tags=traefik_public
+        - traefik.port=3000
+        - traefik.enable=true
+        - traefik.backend=grafana
+        - traefik.frontend.auth.forward.address=http://traefik-forward-auth:4181
+        - traefik.frontend.auth.forward.authResponseHeaders=X-Forwarded-User
+        - traefik.frontend.auth.forward.trustForwardHeader=true
+
+  alertmanager-discord:
+    image: funkypenguin/alertmanager-discord
+    networks: 
+      - appnet
+    environment:
+      - "DISCORD_WEBHOOK=https://discordapp.com/api/webhooks/667830639717908480/tm6HS4YeRakHTCCbQwNYR3eIWEm0fKWAlv9pfxmWQmtlnYf8izNMX_SP1r6WQRG2-upH"
+    
+  alertmanager:
+    image: prom/alertmanager
+    networks:
+      - appnet
+      - traefik_public
+    environment:
+      - PUID=988
+      - PGID=1001
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+    volumes:
+      - /var/data/runtime/swarmprom/alertmanager:/etc/alertmanager
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 64M
+      labels:
+        - traefik.enable=true
+        - traefik.http.middlewares.alertmanager-redirect.redirectscheme.scheme=https
+        - traefik.http.routers.alertmanager-web.middlewares=alertmanager-redirect
+        - traefik.http.routers.alertmanager-web.rule=Host(`alertmanager.york.haus`)
+        - traeifk.http.routers.alertmanager-web.entrypoints=web
+        - traefik.http.routers.alertmanager-websecure.rule=Host(`alertmanager.york.haus`)
+        - traefik.http.routers.alertmanager-websecure.tls=true
+        - traefik.http.routers.alertmanager-websecure.tls.certresolver=leresolver
+        - traefik.http.routers.alertmanager-websecure.entrypoints=websecure
+        - traefik.http.services.alertmanager.loadbalancer.server.port=9093
+  unsee:
+    image: cloudflare/unsee:v0.8.0
+    networks:
+      - appnet
+      - traefik_public
+    environment:
+      - "ALERTMANAGER_URIS=default:http://alertmanager:9093"
+      - PUID=988
+      - PGID=1001
+    deploy:
+      mode: replicated
+      replicas: 1
+
+  node-exporter:
+    image: stefanprodan/swarmprom-node-exporter:v0.16.0
+    networks:
+      - appnet
+    environment:
+      - NODE_ID={{.Node.ID}}
+      - PUID=988
+      - PGID=1001
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+      - /etc/hostname:/etc/nodename
+    command:
+      - '--path.sysfs=/host/sys'
+      - '--path.procfs=/host/proc'
+      - '--collector.textfile.directory=/etc/node-exporter/'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+      # no collectors are explicitely enabled here, because the defaults are just fine,
+      # see https://github.com/prometheus/node_exporter
+      # disable ipvs collector because it barfs the node-exporter logs full with errors on my centos 7 vm's
+      - '--no-collector.ipvs'
+    deploy:
+      mode: global
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+  prometheus:
+    image: stefanprodan/swarmprom-prometheus:v2.5.0
+    networks:
+      - appnet
+      - traefik_public
+    environment:
+      - PUID=988
+      - PGID=1001
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention=24h'
+    volumes:
+      - /var/data/runtime/swarmprom/prometheus:/etc/prometheus
+    configs:
+      - source: node_rules
+        target: /etc/prometheus/swarm_node.rules.yml
+      - source: task_rules
+        target: /etc/prometheus/swarm_task.rules.yml
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.backend=prometheus
+        - traefik.docker.network=traefik_public
+        - traefik.frontend.rule=Host:prometheus.york.haus
+        - traefik.port=9090
+        - traefik.frontend.auth.forward.address=http://traefik-forward-auth:4181
+        - traefik.frontend.auth.forward.authResponseHeaders=X-Forwarded-User
+        - traefik.redirectorservice.frontend.entryPoints=http
+        - traefik.redirectorservice.frontend.redirect.entryPoint=https
+        # Traefik service that listens to HTTPS
+        - traefik.webservice.frontend.entryPoints=https
+        - traefik.tags=${TRAEFIK_PUBLIC_TAG:-traefik-public}
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          memory: 4096M
+        reservations:
+          memory: 128M
+
+networks:
+  traefik_public:
+    external: true
+  appnet:
+    external: true
+    

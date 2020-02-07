@@ -1,0 +1,51 @@
+version: '3.3'
+services: 
+  db:
+    image: "mcr.microsoft.com/mssql/server:2019-GA-ubuntu-16.04"
+    environment:
+      SA_PASSWORD: "Myaddie1"
+      ACCEPT_EULA: "Y"
+    ports:
+      - "1433:1433"
+    deploy:
+      restart_policy:
+        condition: on-failure
+    networks:
+      - yorkserv-api
+
+  api:
+    image: "syork/yorkserv-api:latest"
+    networks:
+      - yorkserv-api
+      - traefik_public
+    depends_on:
+      - "db"
+    environment:
+      TZ: America/Chicago
+      ENV: Production
+    ports:
+      - 5001:80
+    volumes: 
+      - "/var/data/yorkservapi/logs:/app/logs"
+    deploy:
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=traefik_public
+        - traefik.http.middlewares.yorkserv-api-redirect.redirectscheme.scheme=https
+        - traefik.http.routers.yorkserv-api.middlewares=yorkserv-api-redirect
+        - traefik.http.routers.yorkserv-api.rule=Host(`yorkserv.york.haus`)
+        - traeifk.http.routers.yorkserv-api-.entrypoints=web
+        - traefik.http.routers.yorkserv-api-websecure.rule=Host(`yorkserv.york.haus`)
+        - traefik.http.routers.yorkserv-api-websecure.tls=true
+        - traefik.http.routers.yorkserv-api-websecure.tls.certresolver=leresolver
+        - traefik.http.routers.yorkserv-api-websecure.entrypoints=websecure
+        - traefik.http.services.yorkserv-api.loadbalancer.server.port=80
+    
+
+networks:
+  traefik_public:
+    external: true
+  yorkserv-api:
+    external: true

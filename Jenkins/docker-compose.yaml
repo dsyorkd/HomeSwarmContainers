@@ -1,0 +1,57 @@
+version: "3.2"
+services:
+  jenkins:
+    image: syork/jenkins-master
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.http.middlewares.jenkins-redirect.redirectscheme.scheme=https
+        - traefik.http.routers.jenkins-web.middlewares=jenkins-redirect
+        - traefik.http.routers.jenkins-web.rule=Host(`jenkins.york.haus`)
+        - traeifk.http.routers.jenkins-web.entrypoints=web
+        - traefik.http.routers.jenkins-websecure.rule=Host(`jenkins.york.haus`)
+        - traefik.http.routers.jenkins-websecure.tls=true
+        - traefik.http.routers.jenkins-websecure.tls.certresolver=leresolver
+        - traefik.http.routers.jenkins-websecure.entrypoints=websecure
+        - traefik.http.services.jenkins.loadbalancer.server.port=8080
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.70'
+          memory: 2048M
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    volumes:
+        ## Make sure to set the ower of jenkins_home to 1000
+        - /var/data/jenkins:/var/jenkins_home
+        - /etc/localtime:/etc/localtime:ro
+    ports:
+        - 8088:8080
+        - 50000:50000
+    networks: 
+      - build
+      - traefik_public
+    environment:
+        TZ: America/Chicago
+        JAVA_OPTS: -Dmail.smtp.starttls.enable=true
+
+  jenkins-slave:
+    deploy:
+      restart_policy:
+        condition: on-failure
+    environment:
+        - 'JENKINS_URL=http://jenkins:8080'
+    image: syork/jenkins-slave
+    networks:
+      - build
+    volumes:
+        - /var/run/docker.sock:/var/run/docker.sock  # Expose the docker daemon in the container
+        - /var/data/jenkins/slave:/home/jenkins # Avoid mysql volume mount issue
+    depends_on:
+        - jenkins
+networks:
+  build:
+    external: true
+  traefik_public:
+    external: true

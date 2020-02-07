@@ -1,0 +1,54 @@
+version: '3.6'
+services: 
+
+  postdb1:
+    image: postgres:9.6
+    volumes:
+        - /var/data/postgresql:/var/lib/postgresql/data
+        - /etc/localtime:/etc/localtime:ro
+    environment:
+        POSTGRES_PASSWORD_FILE: /run/secrets/postgres-pass
+        POSTGRES_USER: docker
+        POSTGRES_DB: homeassistant
+        POSTGRES_INITDB_ARGS: "--data-checksums"
+    ports:
+        - 5432:5432
+    networks:
+        - postgres
+    deploy: 
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 16384M
+
+  adminer:
+    image: adminer
+    ports:
+      - 8082:8080
+    networks:
+      - postgres
+      - traefik_public
+    labels:
+            - "traefik.enable=true"
+            - "traefik.backend=adminer"
+            - "traefik.frontend.rule=Host:york.haus; PathPrefixStrip: /adminer"
+            - "traefik.port=8082"
+            - "traefik.docker.network=traefik_public"
+            - "traefik.frontend.headers.SSLRedirect=true"
+            - "traefik.frontend.headers.STSSeconds=315360000"
+            - "traefik.frontend.headers.browserXSSFilter=true"
+            - "traefik.frontend.headers.contentTypeNosniff=true"
+            - "traefik.frontend.headers.forceSTSHeader=true"
+            - "traefik.frontend.headers.SSLHost=york.haus"
+            - "traefik.frontend.headers.STSIncludeSubdomains=true"
+            - "traefik.frontend.headers.STSPreload=true"
+            - "traefik.frontend.headers.frameDeny=true"
+
+networks:
+  postgres:
+    external: true
+  traefik_public:
+    external: true

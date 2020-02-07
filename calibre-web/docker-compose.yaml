@@ -1,0 +1,47 @@
+version: '3.3'
+
+services:
+  calibre-web:
+    image: technosoft2000/calibre-web
+    env_file: /var/data/calibre-web/config/calibre-web.env
+    environment:
+      - SET_CONTAINER_TIMEZONE=true
+      - CONTAINER_TIMEZONE=${TZ}
+      - PGID=${PGID}
+      - PUID=${PUID}
+    volumes:
+      - /var/data/calibre-web/app:/calibre-web/app
+      - /etc/localtime:/etc/localtime:ro
+      - /var/data/calibre-web/config:/calibre-web/config
+      - /storage/Media/Books:/books
+      - /var/data/calibre-web/client_secrets.json:/calibre-web/config/client_secrets.json
+    networks:
+      - appnet
+      - traefik_public
+    ports:
+      - 8083:8083
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 4096M
+        reservations:
+          memory: 512M
+          ## Need to update for traefik 2.0 
+      labels:
+        - traefik.frontend.rule=Host:books.${DOMAIN};
+        - traefik.enable=true
+        - traefik.backend=calibre-web
+        - traefik.docker.network=traefik_public
+        - traefik.port=8083
+        - traefik.tags=traefik_public
+        - traefik.frontend.passHostHeader=true
+        - traefik.frontend.auth.forward.address=http://traefik-forward-auth:4181
+        - traefik.frontend.auth.forward.authResponseHeaders=X-Forwarded-User
+
+networks:
+  traefik_public:
+    external: true
+  appnet:
+    external: true
+

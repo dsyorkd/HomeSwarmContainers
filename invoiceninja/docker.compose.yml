@@ -1,0 +1,68 @@
+version: '3.3'
+services:
+  db:
+    image: mysql:5
+    env_file: /var/data/invoiceninja/.env
+    restart: always
+    volumes:
+      - /var/data/invoiceninja/db:/var/lib/mysql
+    networks:
+      - ninja
+
+  app:
+    image: invoiceninja/invoiceninja
+    env_file: /var/data/invoiceninja/.env
+    restart: always
+    depends_on:
+      - db
+    volumes:
+      -  /var/data/invoiceninja/app/storage:/var/www/app/storage
+      -  /var/data/invoiceninja/app/public:/var/www/app/public
+    networks: 
+      - ninja 
+
+  web:
+    image: nginx:1
+    volumes:
+      -  /var/data/invoiceninja/nginx.conf:/etc/nginx/nginx.conf:ro
+      -  /var/data/invoiceninja/app/storage:/var/www/app/storage
+      -  /var/data/invoiceninja/app/public:/var/www/app/public
+    expose: # Expose ports without publishing them to the host machine - they’ll only be accessible to linked services.
+      - "80"
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.port=80
+        - traefik.frontend.rule=Host:invoices.yorkserv.com
+        #- traefik.frontend.auth.forward.trustForwardHeader=true
+        - traefik.docker.network=traefik_public
+        #- traefik.frontend.auth.forward.address=http://traefik-forward-auth:4181
+    networks:
+#      - web        # uncomment if you want to use  external network (reverse proxy for example)
+      - ninja
+      - traefik_public
+
+  cron:
+    image: invoiceninja/invoiceninja
+    env_file: /var/data/invoiceninja/.env
+    volumes:
+      -  /var/data/invoiceninja/app/storage:/var/www/app/storage
+      -  /var/data/invoiceninja/app/public:/var/www/app/public
+    entrypoint: |
+      bash -c 'bash -s <<EOF
+      trap "break;exit" SIGHUP SIGINT SIGTERM
+      sleep 300s
+      while /bin/true; do
+        ./artisan ninja:send-invoices
+        ./artisan ninja:send-reminders
+        sleep 1d
+      done
+      EOF'
+    networks:
+      - ninja
+
+networks:
+  ninja:
+    driver: overlay
+  traefik_public:
+    external: true

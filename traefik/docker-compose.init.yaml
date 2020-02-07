@@ -1,0 +1,44 @@
+version: '3.3'
+services:
+  traefik_init:
+    image: traefik:latest
+    volumes: 
+      - /var/data/traefik/acme/acme.json:/acme.json
+      - /var/data/traefik/acme/yorkhaus-223621-7a7e90aee291.json:/google.json
+    environment:
+      - GCE_PROJECT=yorkhaus-223621
+      - GCE_SERVICE_ACCOUNT_FILE=/google.json
+    command:
+      - "storeconfig"
+      - "--api"
+      - "--entrypoints=Name:http Address::80 Redirect.EntryPoint:https"
+      - "--entrypoints=Name:https Address::443 TLS"
+      - "--defaultentrypoints=http,https"
+      - "--acme"
+      - "--acme.email=syork@yorkserv.com"
+      - "--acme.caServer=https://acme-v02.api.letsencrypt.org/directory"
+      - "--acme.domains=*.york.haus,york.haus"
+      - "--acme.onDemand=false"
+      - "--acme.storage=traefik/acme/account"
+      - "--acme.entryPoint=https"
+      - "--acme.dnsChallenge.provider=gcloud"
+      - "--acme.onhostrule=true"
+      - "--acme.acmelogging=true"
+      - "--logLevel=DEBUG"
+      - "--docker"
+      - "--docker.swarmMode"
+      - "--docker.watch"
+      - "--consul"
+      - "--consul.endpoint=http://consul-leader:8500"
+      - "--consul.prefix=traefik"
+    networks:
+      - traefik
+    deploy:
+      restart_policy:
+        condition: on-failure
+secrets:
+  gce_service_account_file:
+    external: true
+networks:
+  traefik:
+    external: true

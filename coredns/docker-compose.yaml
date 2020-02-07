@@ -1,0 +1,12 @@
+version: '3.6'
+services:
+  coredns:
+    image: coredns
+    ports:
+      - '53:53'
+      - '53:53/udp'
+    volumes:
+      - '/var/data/coredns:/etc/coredns'
+    deploy:
+      restart_policy:
+        condition: on-failure

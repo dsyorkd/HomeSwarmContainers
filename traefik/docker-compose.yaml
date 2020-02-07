@@ -1,0 +1,76 @@
+version: "3.7"
+
+services:
+  traefik:
+    image: traefik:v2.0.6
+    command:
+      - --log.level=DEBUG
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --providers.docker
+      - --providers.docker.swarmmode=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.file.filename=/dynamic.yaml
+      - --providers.docker.network=traefik_public
+      - --api=true
+      - --api.dashboard=true
+      - --api.insecure=true
+      - --api.debug=true
+      - --certificatesresolvers.leresolver.acme.caserver=https://acme-v02.api.letsencrypt.org/directory
+      - --certificatesresolvers.leresolver.acme.email=spence1534@gmail.com
+      - --certificatesresolvers.leresolver.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.leresolver.acme.dnschallenge=true
+      - --certificatesresolvers.leresolver.acme.dnschallenge.provider=gcloud
+    environment:
+      - GCE_PROJECT=yorkhaus-223621
+      - GCE_SERVICE_ACCOUNT_FILE=/letsencrypt/yorkhaus-223621-7a7e90aee291.json
+      - GCE_PROPAGATION_TIMEOUT=120
+    ports:
+      - 80:80
+      - 443:443
+      - 8080:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/data/traefik/dynamic.yaml:/dynamic.yaml
+      - /var/data/traefik/traefik.log:/var/log/traefik.log
+      - /var/data/traefik/letsencrypt:/letsencrypt
+    networks:
+      - traefik_public
+      - appnet
+    # Global mode makes an instance of traefik listen on _every_ node, so that regardless of which
+    # node the request arrives on, it'll be forwarded to the correct backend service.
+    deploy:
+      labels: 
+        # Dashboard 
+        - "traefik.enable=true"
+        - "traefik.http.routers.traefik.rule=Host(`traefik.york.haus`)"
+        - "traefik.http.routers.traefik.tls=true"
+        - "traefik.http.routers.traefik.tls.certresolver=leresolver"
+        - "traeifk.http.routers.traefik.entrypoints=websecure"
+        - "traefik.http.routers.traefik.service=api@internal"
+        - "traefik.http.serverices.traefik.loadbalancer.server.port=8080"
+
+        #- "traefik.http.routers.traefik.middlewares=auth"
+        #- "traefik.http.middlewares.auth.forwardauth.address=https://auth.york.haus"
+        
+        # Global Redirect to https
+        #- "traefik.http.routers.redirs.rule=hostregexp(`{host:.+}`)"
+        #- "traefik.http.routers.redirs.entrypoints=web"
+        #- "traefik.http.routers.redirs.middlewares=redirect-to-https"
+
+        # middleware redirect
+        #- "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"  
+      mode: global
+      placement:
+        constraints: [node.role == manager]
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+
+networks:
+  traefik_public:
+    external: true
+  appnet:
+    external: true

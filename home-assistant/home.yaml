@@ -1,0 +1,8 @@
+version: "3.2"
+networks:
+  mac:
+    driver: macvlan_swarm
+    ipam:
+      config:
+        - subnet: 10.100.0.0/23
+  

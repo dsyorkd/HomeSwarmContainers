@@ -1,0 +1,187 @@
+version: "3.6"
+services:
+    portainer:
+        image: portainer/portainer
+        container_name: "portainer-app"
+        command: -d /data
+        restart: always
+        ports:
+            - 9000:9000
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock
+            - portainer_data:/data
+        networks:
+            - traefik_proxy
+        labels:
+            - "traefik.enable=true"
+            #      - "traefik.frontend.rule=Host:portainer.${DOMAINNAME}"
+            - "traefik.frontend.rule=Host:${DOMAINNAME}; PathPrefixStrip:/portainer"
+            - "traefik.port=9000"
+            - "traefik.docker.network=traefik_proxy"
+    influxdb:
+        image: influxdb:latest
+        container_name: "influxdb"
+        healthcheck:
+            test: ["CMD", "curl", "-sI", "http://127.0.0.1:8086/ping"]
+            interval: 30s
+            timeout: 1s
+            retries: 24
+        networks:
+            infrastructure:
+              aliases:
+                - influxdb
+        volumes:
+            - ${USERDIR}/influxdb:/var/lib/influxdb
+        environment:
+            PUID: ${PUID}
+            PGID: ${PGID}
+            TZ: ${TZ}
+            INFLUXDB_DB: "home-assistant"
+            INFLUXDB_ADMIN_USER: "admin"
+            INFLUXDB_ADMIN_PASSWORD: "changeme"
+            INFLUXDB_USER: "syork"
+            INFLUXDB_USER_PASSWORD: "changeme"
+        ports:
+            - 8086:8086
+            - 8083:8083
+        restart: unless-stopped
+    grafana:
+        image: grafana/grafana:5.1.0
+        restart: unless-stopped
+        container_name: "grafana"
+        depends_on:
+            - influxdb
+        environment:
+             TZ: ${TZ}
+             GF_SERVER_ROOT_URL: "https://york.haus/grafana"
+             GF_SECURITY_ADMIN_PASSWORD: "changeme"  
+        volumes:
+            - /storage/apps/grafana/etc:/etc/grafana
+            - /storage/apps/grafana/lib:/var/lib/grafana
+            - /storage/apps/grafana/log:/var/log/grafana
+            
+        ports:
+          - "3000:3000"
+        networks:
+            - traefik_proxy
+        labels:
+            - "traefik.enable=true"
+            - "traefik.backend=grafana"
+            - "traefik.frontend.rule=Host:${DOMAINNAME}; PathPrefixStrip: /grafana"
+            - "traefik.port=3000"
+            - "traefik.docker.network=traefik_proxy"
+            - "traefik.frontend.headers.SSLRedirect=true"
+#           - "traefik.frontend.headers.STSSeconds=315360000"
+#            - "traefik.frontend.headers.browserXSSFilter=true"
+#            - "traefik.frontend.headers.contentTypeNosniff=true"
+#            - "traefik.frontend.headers.forceSTSHeader=true"
+#            - "traefik.frontend.headers.SSLHost=${DOMAINNAME}"
+#            - "traefik.frontend.headers.STSIncludeSubdomains=true"
+#            - "traefik.frontend.headers.STSPreload=true"
+#            - "traefik.frontend.headers.frameDeny=true"
+    mongo:
+        container_name: mongo
+        restart: unless-stopped
+        image: mongo
+        volumes:
+            - ${USERDIR}/monogo:/data/db
+            - /etc/localtime:/etc/localtime:ro
+        ports:
+            - target: 27017
+              published: 27017
+              protocol: tcp
+              mode: host
+        environment:
+            PUID: ${PUID}
+            PGID: ${PGID}
+            TZ: ${TZ}
+        networks:
+            infrastructure:
+              aliases:
+                - mongodb
+                
+
+    postdb1:
+        container_name: postdb1
+        restart: unless-stopped
+        image: postgres:9.6
+        volumes:
+            - ${USERDIR}/postgresql:/var/lib/postgresql/data
+            - /etc/localtime:/etc/localtime:ro
+        environment:
+            POSTGRES_PASSWORD: dockerpass
+        ports:
+            - target: 5432
+              published: 5432
+              protocol: tcp
+              mode: host
+        networks:
+            infrastructure:
+              aliases:
+                - postdb
+    mariadb:
+        image: "linuxserver/mariadb:latest"
+        container_name: "mariadb"
+        hostname: mariadb
+        volumes:
+            - ${USERDIR}/mariadb:/config
+            - ${USERDIR}/mariadb/lib:/var/lib/mysql
+        ports:
+            - target: 3306
+              published: 3306
+              protocol: tcp
+              mode: host
+        restart: always
+        environment:
+            - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+            - MYSQL_USER=${MYSQL_USER}
+            - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+            - MYSQL_DATABASE=${MYSQL_DATABASE}
+            - PUID=${PUID}
+            - PGID=${PGID}
+            - TZ=${TZ}
+        networks:
+            infrastructure:
+              aliases:
+                - mariadb
+    phpmyadmin:
+        hostname: phpmyadmin
+        container_name: phpmyadmin
+        image: phpmyadmin/phpmyadmin
+        restart: unless-stopped
+        links:
+            - mariadb:db
+        ports:
+            - 8066:8066
+        environment:
+            - PMA_HOST=mariadb
+            - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+        networks:
+            - traefik_proxy
+            - infrastructure
+        labels:
+            - "traefik.enable=true"
+            - "traefik.backend=pma"
+            - "traefik.frontend.rule=Host:${DOMAINNAME}; PathPrefixStrip: /phpadmin"
+            - "traefik.port=8066"
+            - "traefik.docker.network=traefik_proxy"
+            - "traefik.frontend.headers.SSLRedirect=true"
+            - "traefik.frontend.headers.STSSeconds=315360000"
+            - "traefik.frontend.headers.browserXSSFilter=true"
+            - "traefik.frontend.headers.contentTypeNosniff=true"
+            - "traefik.frontend.headers.forceSTSHeader=true"
+            - "traefik.frontend.headers.SSLHost=${DOMAINNAME}"
+            - "traefik.frontend.headers.STSIncludeSubdomains=true"
+            - "traefik.frontend.headers.STSPreload=true"
+            - "traefik.frontend.headers.frameDeny=true"
+volumes:
+    portainer_data:
+    grafana-storage: 
+networks:
+    traefik_proxy:
+        external:
+            name: traefik_proxy
+    infrastructure:
+        external:
+            name: infrastructure
+    

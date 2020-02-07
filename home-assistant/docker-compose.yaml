@@ -1,0 +1,200 @@
+version: "3"
+
+services:
+  influxdb:
+    image: influxdb
+    networks:
+      - macvlan_swarm
+      - appnet
+    volumes:
+      - /var/data/homeassistant/influxdb:/var/lib/influxdb
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+    - PUID=988
+    - PGID=1001
+    - TZ=America/Chicago
+
+  homeassistant:
+    image: homeassistant/home-assistant
+    dns_search: york.haus
+    dns: 10.100.0.1
+    volumes:
+      - /var/data/homeassistant:/config
+      - /etc/localtime:/etc/localtime:ro
+    deploy:
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.enable=true
+        - traefik.http.middlewares.homeassistant-redirect.redirectscheme.scheme=https
+        - traefik.http.routers.homeassistant-web.middlewares=homeassistant-redirect
+        - traefik.http.routers.homeassistant-web.rule=Host(`home.york.haus`)
+        - traeifk.http.routers.homeassistant-web.entrypoints=web
+        - traefik.http.routers.homeassistant-websecure.rule=Host(`home.york.haus`)
+        - traefik.http.routers.homeassistant-websecure.tls=true
+        - traefik.http.routers.homeassistant-websecure.tls.certresolver=leresolver
+        - traefik.http.routers.homeassistant-websecure.entrypoints=websecure
+        - traefik.http.services.homeassistant.loadbalancer.server.port=8123
+    networks:
+      - traefik_public
+      - macvlan_swarm
+      - postgres
+      - appnet
+      - autopirate
+    ports:
+      - 8123:8123
+    environment:
+      - PUID=988
+      - PGID=1001
+      - TZ=America/Chicago
+
+  grafana-app:
+    image: grafana/grafana
+    volumes:
+      - /var/data/homeassistant/grafana:/var/lib/grafana
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - traefik_public
+      - appnet
+      - postgres
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.enable=true
+        - traefik.http.middlewares.grafana-redirect.redirectscheme.scheme=https
+        - traefik.http.routers.grafana-web.middlewares=grafana-redirect
+        - traefik.http.routers.grafana-web.rule=Host(`grafana.york.haus`)
+        - traeifk.http.routers.grafana-web.entrypoints=web
+        - traefik.http.routers.grafana-websecure.rule=Host(`grafana.york.haus`)
+        - traefik.http.routers.grafana-websecure.tls=true
+        - traefik.http.routers.grafana-websecure.tls.certresolver=leresolver
+        - traefik.http.routers.grafana-websecure.entrypoints=websecure
+        - traefik.http.services.grafana.loadbalancer.server.port=3000
+    environment:
+      - TZ=America/Chicago
+
+  configurator:
+    image: danielperna84/hass-configurator:latest
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=traefik_public
+        - traefik.http.routers.configurator.rule=Host(`configurator.york.haus`)
+        - traefik.http.routers.configurator.entrypoints=websecure
+        - traefik.http.routers.configurator.tls=true
+        - traefik.http.routers.configurator.tls.certresolver=leresolver
+        - traefik.http.services.configurator.loadbalancer.server.port=80
+    depends_on:
+        - home-assistant
+    environment:
+      - PUID=988
+      - PGID=1001
+      - TZ=America/Chicago
+    volumes:
+      - /var/data/homeassistant/configurator:/config
+      - /var/data/homeassistant:/hass-config
+    networks:
+      - appnet
+      - traefik_public
+  
+  homebridge:
+    image: oznu/homebridge:latest
+    restart: unless-stopped
+    depends_on:
+      - home-assistant
+    environment:
+      - PUID=988
+      - PGID=1001
+      - TZ=America/Chicago
+    volumes:
+      - /var/data/homebridge:/homebridge
+    networks:
+      - macvlan_swarm
+      - appnet
+
+  mqtt:
+    image: eclipse-mosquitto:latest
+    restart: unless-stopped
+    volumes:
+      - /var/data/homeassistant/mqtt/data:/mosquitto/data
+      - /var/data/homeassistant/mqtt/log:/mosquitto/log
+      - /var/data/homeassistant/mqtt:/mosquitto/config
+    networks:
+      - appnet
+    ports:
+      - 1883:1883
+    environment:
+      - PUID=988
+      - PGID=1001
+      - TZ=America/Chicago
+
+  hadockermon:
+    restart: unless-stopped
+    image: philhawthorne/ha-dockermon
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/data/ha-dockermon:/config
+    networks:
+      - traefik_public
+      - appnet
+    ports:
+      - 8126:8126
+    environment:
+      - PUID=988
+      - PGID=1001
+      - TZ=America/Chicago
+    labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.ha-docker-redirect.redirectscheme.scheme=https
+      - traefik.http.routers.ha-docker-web.middlewares=ha-docker-redirect
+      - traefik.http.routers.ha-docker-web.rule=Host(`ha-docker.york.haus`)
+      - traeifk.http.routers.ha-docker-web.entrypoints=web
+      - traefik.http.routers.ha-docker-websecure.rule=Host(`ha-docker.york.haus`)
+      - traefik.http.routers.ha-docker-websecure.tls.certresolver=leresolver
+      - traefik.http.routers.ha-docker-websecure.tls=true
+      - traefik.http.routers.ha-docker-websecure.entrypoints=websecure
+      - traefik.http.services.ha-docker-websecure.loadbalancer.server.port=8126
+      
+  nodered1:
+    image: nodered/node-red-docker
+    environment:
+      - TZ=America/Chicago
+    depends_on:
+      - "home-assistant"
+    volumes:
+      - /var/data/node-red-1/user:/data
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - traefik_public
+      - appnet
+    ports:
+      - "1880:1880"
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.http.middlewares.nodered-redirect.redirectscheme.scheme=https
+        - traefik.http.routers.nodered-web.middlewares=nodered-redirect
+        - traefik.http.routers.nodered-web.rule=Host(`nodered.york.haus`)
+        - traeifk.http.routers.nodered-web.entrypoints=web
+        - traefik.http.routers.nodered-websecure.rule=Host(`nodered.york.haus`)
+        - traefik.http.routers.nodered-websecure.tls=true
+        - traefik.http.routers.nodered-websecure.tls.certresolver=leresolver
+        - traefik.http.routers.nodered-websecure.entrypoints=websecure
+        - traefik.http.services.nodered.loadbalancer.server.port=1880
+
+networks:
+  traefik_public:
+    external: true
+  macvlan_swarm:
+    external: true
+  postgres:
+    external: true
+  autopirate:
+    external: true
+  appnet:
+    external: true

@@ -1,0 +1,20 @@
+version: '3.6'
+services: 
+  factorio:
+    image: factoriotools/factorio:stable
+    networks:
+      - macvlan_swarm
+    ports:
+      - 34197:34197/udp
+      - 27015:27015/tcp
+    volumes:
+      - /var/data/factorio:/factorio
+    environment:
+      - PUID=988
+      - PGID=1001
+      - UPDATE_MODS_ON_START=true
+      - SAVE_NAME="tower of power"
+
+networks:
+  macvlan_swarm:
+    external: true

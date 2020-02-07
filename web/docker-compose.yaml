@@ -1,0 +1,47 @@
+version: '3.1'
+
+services:
+
+  yorkserv:
+    image: wordpress:latest
+    ports:
+      - "8001:80"
+    volumes:
+      - /var/data/yorkserv/html:/var/www/html
+    networks:
+      - traefik_public
+      - dbnet
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.port=80
+        - traefik.frontend.rule=Host:yorkserv.com
+        - traefik.frontend.auth.forward.trustForwardHeader=true
+        - traefik.docker.network=traefik_public
+      restart_policy:
+        condition: on-failure
+    environment:
+      WORDPRESS_DB_HOST: yorkserv_db
+      WORDPRESS_DB_USER: syork
+      WORDPRESS_DB_PASSWORD: myaddie1
+      WORDPRESS_DB_NAME: yorkserv
+  yorkserv_db:
+    image: mysql:5.7
+    deploy: 
+      restart_policy:
+        condition: on-failure
+    networks:
+      - dbnet
+    environment:
+      MYSQL_DATABASE: yorkserv
+      MYSQL_USER: syork
+      MYSQL_PASSWORD: myaddie1
+      MYSQL_RANDOM_ROOT_PASSWORD: '&A3ezaSw'
+    volumes:
+      - /var/data/yorkserv/db:/var/lib/mysql
+
+networks:
+  dbnet:
+    external: true
+  traefik_public:
+    external: true

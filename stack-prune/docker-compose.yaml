@@ -1,0 +1,26 @@
+version: '3.7'
+
+x-default-opts: 
+  &default-opts
+  logging:
+    options:
+      max-size: "1m" 
+  # driver: "gelf"
+  # options:
+  #   gelf-address: "udp://127.0.0.1:5000"
+services:
+  image-prune:
+    <<: *default-opts
+    image: docker
+    command: sh -c "while true; do docker image prune -af; sleep 86400; done"
+    networks:
+      - bridge
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      mode: global
+
+networks:
+  bridge:
+    external: true
+    name: bridge

@@ -1,0 +1,64 @@
+version: "3.7"
+services:
+  plexms:
+    image: plexinc/pms-docker
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 12G
+        reservations:
+          memory: 8G
+      labels:
+    networks:
+      traefik_public:
+      autopirate: 
+      macvlan_swarm:
+        ipv4_address: 10.100.1.128
+    volumes:
+      - plex-data:/config
+      - /tmp:/transcode
+      - tv:/tv
+      - movies:/movies
+    ports:
+      - "32400:32400/tcp"
+      - "3005:3005/tcp"
+      - "8324:8324/tcp"
+      - "32469:32469/tcp"
+      - "1900:1900/udp"
+      - "32410:32410/udp"
+      - "32412:32412/udp"
+      - "32413:32413/udp"
+      - "32414:32414/udp"
+    environment:
+      - TZ=America/Chicago
+      - PLEX_CLAIM=claim-pwqtwr2pXJ72z4u9RXXm
+      - HOSTNAME="plexadilly"
+      - PLEX_UID=988
+      - PLEX_GID=1001
+      - ADVERTISE_IP="http://10.100.1.200:32400"
+      - ALLOWED_NETWORKS=10.100.0.0/24,172.16.0.1
+
+
+networks:
+  autopirate:
+    external: true
+  macvlan_swarm:
+    external: true
+    config: 
+      - subnet: 10.100.0.0/24
+  traefik_public:
+    external: true
+volumes:
+  plex-data:
+    external: true
+    name: plex-data
+  media:
+    external: true
+    name: media
+  movies:
+    external: true
+    name: movies
+  tv:
+    external: true
+    name: tv

@@ -1,0 +1,13 @@
+version: "3.6"
+services:
+    keepalived:
+        image: osixia/keepalived
+        container_name: keepalived_backup
+        restart: always
+        newtork: host
+        volumes:
+          - /var/data/keepalived_backup:/data
+        env_file:
+          - keepalived.env
+
+

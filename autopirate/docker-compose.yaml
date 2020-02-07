@@ -1,0 +1,207 @@
+version: "3.6"
+services:
+  sonarr:
+    image: "lsiodev/sonarr-preview"
+    volumes:
+      - /var/data/sonarr:/config
+      - downloads:/Downloads
+      - tv:/tv
+      - "/etc/localtime:/etc/localtime:ro"
+    ports:
+      - "8989:8989"
+    environment:
+      - PUID=988
+      - PGID=1001
+      - TZ=America/Chicago
+    networks:
+      - traefik_public
+      - autopirate
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+      labels:
+        - "traefik.enable=true"
+        - "traefik.backend=sonarr"
+        - "traefik.frontend.rule=Host:york.haus;PathPrefix:/tv"
+        - "traefik.port=8989"
+        - "traefik.docker.network=traefik_public" 
+        - "traefik.frontend.headers.SSLRedirect=true"
+        - "traefik.frontend.headers.STSSeconds=315360000"
+        - "traefik.frontend.headers.browserXSSFilter=true"
+        - "traefik.frontend.headers.contentTypeNosniff=true"
+        - "traefik.frontend.headers.forceSTSHeader=true"
+        - "traefik.frontend.headers.SSLHost=york.haus"
+        - "traefik.frontend.headers.STSIncludeSubdomains=true"
+        - "traefik.frontend.headers.STSPreload=true"
+        - "traefik.frontend.headers.frameDeny=true"
+  radarr:
+    image: "linuxserver/radarr:preview"
+    volumes:
+      - /var/data/radarr:/config
+      - downloads:/downloads
+      - movies:/movies
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "7878:7878"
+    restart: unless-stopped
+    environment:
+      - PUID=988
+      - PGID=1001
+      - TZ=America/Chicago
+    networks:
+      - traefik_public
+      - autopirate
+    deploy:
+      resources:
+          limits:
+            memory: 2G
+      labels:
+        - "traefik.enable=true"
+        - "traefik.backend=radarr"
+        - "traefik.frontend.rule=Host:york.haus; PathPrefix:/movies"
+        - "traefik.port=7878"
+        - "traefik.docker.network=traefik_public" 
+        - "traefik.frontend.headers.SSLRedirect=true"
+        - "traefik.frontend.headers.STSSeconds=315360000"
+        - "traefik.frontend.headers.browserXSSFilter=true"
+        - "traefik.frontend.headers.contentTypeNosniff=true"
+        - "traefik.frontend.headers.forceSTSHeader=true"
+        - "traefik.frontend.headers.SSLHost=york.haus"
+        - "traefik.frontend.headers.STSIncludeSubdomains=true"
+        - "traefik.frontend.headers.STSPreload=true"
+        - "traefik.frontend.headers.frameDeny=false"
+  jackett:
+    image: "linuxserver/jackett"
+    volumes:
+      - /var/data/jackett:/config
+      - downloads:/Downloads
+      - "/etc/localtime:/etc/localtime:ro"
+    ports:
+      - "9117:9117"
+    environment:
+      - PUID=988
+      - PGID=1001
+      - TZ=America/Chicago
+    networks:
+      - traefik_public
+      - autopirate
+    deploy:
+      labels:
+        - "traefik.enable=true"
+        - "traefik.backend=jackett"
+        - "traefik.frontend.rule=Host:york.haus; PathPrefix:/jackett"
+        - "traefik.port=9117"
+        - "traefik.docker.network=traefik_public" 
+        - "traefik.frontend.headers.SSLRedirect=true"
+        - "traefik.frontend.headers.STSSeconds=315360000"
+        - "traefik.frontend.headers.browserXSSFilter=true"
+        - "traefik.frontend.headers.contentTypeNosniff=true"
+        - "traefik.frontend.headers.forceSTSHeader=true"
+        - "traefik.frontend.headers.SSLHost=${DOMAINNAME}"
+        - "traefik.frontend.headers.STSIncludeSubdomains=true"
+        - "traefik.frontend.headers.STSPreload=true"
+        - "traefik.frontend.headers.frameDeny=true"
+  deluge:
+    image: linuxserver/deluge:5b398f77-ls22
+    networks:
+      - autopirate
+      - traefik_public
+    ports:
+      - 50100:50100
+      - 58846:58846
+      - 8112:8112
+      - 54673:54673
+    environment:
+      - PUID=988
+      - PGID=1001
+      - UMASK_SET=022
+      - TZ=America/Chicago
+    volumes:
+      - /var/data/deluge:/config
+      - downloads:/downloads
+    deploy:
+      labels:
+        - "traefik.enable=true"
+        - "traefik.backend=deluge"
+        - "traefik.frontend.rule=Host:deluge.york.haus;"
+        - "traefik.port=8112"
+        - "traefik.docker.network=traefik_public"
+  tautulli:
+    image: linuxserver/tautulli
+    volumes:
+      - /var/data/tautulli/config:/config
+      - /var/data/tautulli/logs:/logs:ro
+    ports:
+      - "8181:8181"
+    environment:
+      - PUID=988
+      - PGID=1001
+      - TZ=America/Chicago
+    networks:
+      - traefik_public
+      - autopirate
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+      labels:
+        - "traefik.enable=true"
+        - "traefik.backend=tautulli"
+        - "traefik.frontend.rule=Host:york.haus; PathPrefix: /tautulli"
+        - "traefik.port=8181"
+        - "traefik.docker.network=traefik_public" 
+        - "traefik.frontend.headers.SSLRedirect=true"
+        - "traefik.frontend.headers.STSSeconds=315360000"
+        - "traefik.frontend.headers.browserXSSFilter=true"
+        - "traefik.frontend.headers.contentTypeNosniff=true"
+        - "traefik.frontend.headers.forceSTSHeader=true"
+        - "traefik.frontend.headers.SSLHost=york.haus"
+        - "traefik.frontend.headers.STSIncludeSubdomains=true"
+        - "traefik.frontend.headers.STSPreload=true"
+        - "traefik.frontend.headers.frameDeny=false"
+  ombi:
+    image: linuxserver/ombi
+    volumes:
+      - /var/data/ombi:/config
+    ports:
+      - "3579:3579"
+    environment:
+      - PUID=988
+      - PGID=1001
+      - TZ=America/Chicago 
+    networks:
+      - traefik_public
+      - autopirate
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+      labels:
+        - "traefik.enable=true"
+        - "traefik.backend=ombi"
+        - "traefik.frontend.rule=Host:york.haus; PathPrefix:/requests/"
+        - "traefik.port=3579"
+        - "traefik.docker.network=traefik_public" 
+        - "traefik.frontend.headers.SSLRedirect=true"
+        - "traefik.frontend.headers.STSSeconds=315360000"
+        - "traefik.frontend.headers.browserXSSFilter=true"
+        - "traefik.frontend.headers.contentTypeNosniff=true"
+        - "traefik.frontend.headers.forceSTSHeader=true"
+        - "traefik.frontend.headers.SSLHost=york.haus"
+        - "traefik.frontend.headers.STSIncludeSubdomains=true"
+        - "traefik.frontend.headers.STSPreload=true"
+        - "traefik.frontend.headers.frameDeny=false"
+
+networks:
+  traefik_public:
+    external: true
+  autopirate:
+    external: true
+volumes:
+   tv:
+     external: true
+   movies:
+     external: true
+   downloads:
+     external: true

@@ -1,0 +1,53 @@
+version: "3"
+
+# More info at https://github.com/pi-hole/docker-pi-hole/ and https://docs.pi-hole.net/
+services:
+  pihole:
+    image: pihole/pihole:latest
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "67:67/udp"
+      - "8880:80/tcp"
+    environment:
+      TZ: 'America/Chicago'
+      WEBPASSWORD: 'password'
+      FTL_CMD: debug
+      DNSMASQ_LISTENING: all
+      VIRTUAL_HOST:
+      ServerIP: 10.100.1.200  
+
+        
+    # Volumes store your data between container upgrades
+    volumes:
+      - '/var/data/pihole/:/etc/pihole/'
+      - '/var/data/pihole/dnsmasq.d/:/etc/dnsmasq.d/'
+      - '/var/data/pihole/logs:/var/log'
+      - '/var/data/pihole/resolv.conf:/etc/resolv.conf'
+      - '/var/data/pihole/hosts.home:/etc/hosts.home'
+    dns:
+      - 127.0.0.1
+      - 1.1.1.1
+    # Recommended but not required (DHCP needs NET_ADMIN)
+    #   https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
+    cap_add:
+      - NET_ADMIN
+    deploy:
+        replicas: 1
+        restart_policy:
+            condition: on-failure
+        placement:
+            constraints:
+                - node.role == manager
+        labels:
+          - traefik.enable=true
+          - traefik.http.middlewares.pi-hole-redirect.redirectscheme.scheme=https
+          - traefik.http.routers.pi-hole-web.middlewares=pi-hole-redirect
+          - traefik.http.routers.pi-hole-web.rule=Host(`york.haus`) && PathPrefix('/pihole')
+          - traeifk.http.routers.pi-hole-web.entrypoints=web
+          - traefik.http.routers.pi-hole-websecure.rule=Host(`york.haus`) && PathPrefix('/pihole')
+          - traefik.http.routers.pi-hole-websecure.tls=true
+          - traefik.http.routers.pi-hole-websecure.tls.certresolver=leresolver
+          - traefik.http.routers.pi-hole-websecure.entrypoints=websecure
+          - traefik.http.services.pi-hole.loadbalancer.server.port=8880
+            
