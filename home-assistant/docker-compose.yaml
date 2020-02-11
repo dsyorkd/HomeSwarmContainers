@@ -53,6 +53,7 @@ services:
     volumes:
       - /var/data/homeassistant/grafana:/var/lib/grafana
       - /etc/localtime:/etc/localtime:ro
+    user: "988"
     networks:
       - traefik_public
       - appnet

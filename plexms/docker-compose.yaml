@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   plexms:
-    image: plexinc/pms-docker
+    image: plexinc/pms-docker:plexpass
     deploy:
       replicas: 1
       resources:
@@ -9,7 +9,6 @@ services:
           memory: 12G
         reservations:
           memory: 8G
-      labels:
     networks:
       traefik_public:
       autopirate: 
@@ -45,8 +44,6 @@ networks:
     external: true
   macvlan_swarm:
     external: true
-    config: 
-      - subnet: 10.100.0.0/24
   traefik_public:
     external: true
 volumes:
