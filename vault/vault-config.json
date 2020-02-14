@@ -1,15 +1,18 @@
 {
-    "backend": {
+    "storage": {
         "consul": {
-          "address": "http://server-bootstrap:5000", "path":"vault/"
+          "address": "http://consul_server:8500", 
+          "path": "vault/"
           
         }
     },
+    "plugin_directory" : "/vault/plugins",
     "listener": {
         "tcp": {
-            "address": "0.0.0.0:8200", "tls_disable" : 1
+            "address": "0.0.0.0:8200", 
+            "tls_disable": true
         }
     },
-    "ui":true, "disable_mlock":true
-    
+    "ui": true, 
+    "disable_mlock": true
 }
