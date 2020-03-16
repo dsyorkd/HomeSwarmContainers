@@ -1,12 +1,20 @@
-version: '3.6'
+version: '3.2'
 services:
   coredns:
-    image: coredns
+    image: coredns/coredns
     ports:
-      - '53:53'
+      - '53:53/tcp'
       - '53:53/udp'
+      - '9153:9153/tcp'
     volumes:
-      - '/var/data/coredns:/etc/coredns'
+      - '/var/data/coredns:/data'
+    command: -conf /data/Corefile
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
     deploy:
+      mode: global
       restart_policy:
         condition: on-failure

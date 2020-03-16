@@ -1,18 +1,18 @@
-version: '3.3'
+version: '3.7'
 
 services:
-  server-bootstrap:
-    image: consul:1.6.3
-    ports:
-      - 8500:8500
-    command: "agent -server -bootstrap-expect 3 -ui -client 0.0.0.0 -bind '{{ GetInterfaceIP \"eth0\" }}'"
   server:
     image: consul:1.6.3
-    command: -server -bootstrap -log-level debug -ui-dir /ui
+    command: "agent -config-dir /consul/config -data-dir /consul/data -bootstrap-expect 3 -client 0.0.0.0"
+    environment:
+      - 'CONSUL_BIND_INTERFACE=eth0'
     networks:
-      - appnet
+      - macvlan_swarm
+      - consul
+    ports:
+      - 8500:8500
     deploy:
-      mode: global
+      replicas: 3
       update_config:
         parallelism: 1
         failure_action: pause
@@ -25,21 +25,30 @@ services:
       placement:
         constraints: [node.role == manager]
     volumes:
-      - type: bind
-        source: /var/data/consul
-        target: /data
-    ports:
-      - "8400:8400"
-      - "8500:8500"
-      - "8600:53/udp"
-  client:
+       - consul:/consul 
+
+  consul-agent:
     image: consul:1.6.3
-    command: "agent -retry-join server-bootstrap -client 0.0.0.0 -bind '{{ GetInterfaceIP \"eth0\" }}'"
+    volumes:
+      - consul:/consul
+    command: "agent -client 0.0.0.0  -config-file /consul/config/consul.hcl"
     deploy:
-      replicas: 2
+      mode: global
     depends_on:
-      - server-bootstrap
+      - server
+    networks:
+      - consul
+    environment:
+      - 'CONSUL_BIND_INTERFACE=eth0'
 
 networks:
   appnet:
+    external: true
+  macvlan_swarm:
+    external: true
+  consul:
+    driver: overlay
+    attachable: true
+volumes:
+  consul:
     external: true

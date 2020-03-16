@@ -11,7 +11,7 @@ services:
     depends_on:
       - mongo
     ports:
-      - 3478:3478/tcp
+      - 3478:3478/udp
       - 10001:10001/udp
       - 8808:8080/tcp
       - 8443:8443/tcp

@@ -1,0 +1,20 @@
+version: "3"
+
+# More info at https://github.com/pi-hole/docker-pi-hole/ and https://docs.pi-hole.net/
+services:
+  nfs:
+    image: ananace/nfs-ganesha-ceph
+    restart: always
+    ports:
+      - "2049:2049/tcp"
+      - "38465:38465/tcp"
+      - "38466:38466/tcp"
+      - "38467:38467/tcp"
+      - "662:662/tcp"
+      - "111:111"
+    environment:
+      GANESHA_CONFIGFILE: /data/ganesha.conf
+      GANESHA_OPTIONS:
+    volumes:
+      - /etc/ceph:/etc/ceph
+      - /var/data/ganesha:/data
